@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battle Royale Game</title>
+    <style>
+        body {
+            background-color: #2e485e; /* Light background for contrast */
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            background: #4e4d7a; /* Light blue canvas background */
+            display: block;
+            margin: 0 auto;
+            border: 2px solid #00796b; /* Border around the canvas */
+        }
+        #menu, #gameOverMenu, #difficultyMenu {
+            text-align: center;
+            margin: 10px;
+            display: none; /* Hide menus initially */
+        }
+        button {
+            color: rgb(149, 177, 138); /* White text */
+            font-size: 20px; /* Larger text */
+            padding: 15px 30px; /* Bigger buttons */
+            border: none; /* Remove border */
+            border-radius: 5px; /* Rounded corners */
+            cursor: pointer; /* Pointer cursor on hover */
+            margin: 10px; /* Space between buttons */
+            transition: background-color 0.3s; /* Smooth transition for hover effect */
+        }
+        h2, h3 {
+            color: #00796b; /* Text color for headings */
+        }
+    </style>
+</head>
+<body>
+    <div id="difficultyMenu">
+        <h2>Select Difficulty</h2>
+        <button onclick="startGame('easy')">Easy</button>
+        <button onclick="startGame('medium')">Medium</button>
+        <button onclick="startGame('hard')">Hard</button>
+        <button onclick="startGame('impossible')">Impossible</button>
+    </div>
+    <div id="menu">
+        <h2>Score: <span id="score">0</span></h2>
+        <h2>Damage Done: <span id="damageDone">0</span></h2>
+        <h2>Wave: <span id="waveCount">0</span></h2>
+        <button onclick="changeGun('Pistol')">Pistol</button>
+        <button onclick="changeGun('Shotgun')">Shotgun</button>
+        <button onclick="changeGun('Rifle')">Rifle</button>
+    </div>
+    <div id="gameOverMenu">
+        <h2>Game Over!</h2>
+        <h3>Final Score: <span id="finalScore"></span></h3>
+        <button onclick="resetGame()">Restart</button>
+        <button onclick="closeTab()">Close Tab</button>
+        <button onclick="goToMenu()">Back to Menu</button>
+    </div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // Game settings
+        const playerSize = 50;
+        const bulletSize = 15;
+        const botSize = 50;
+
+        let playerHealth = 15000;
+        let score = 0;
+        let damageDone = 0; // Counter for damage done
+        let playerSpeed = 15;
+        let bulletSpeed = 12;
+        let bots = [];
+        let bullets = [];
+        let waveNumber = 0;
+        let gameOver = false;
+
+        const guns = {
+            'Pistol': { damage: 10, bulletSpeed: 15, bulletColor: 'red' },
+            'Shotgun': { damage: 35, bulletSpeed: 22, bulletColor: 'blue' },
+            'Rifle': { damage: 25, bulletSpeed: 20, bulletColor: 'green' }
+        };
+
+        let currentGun = 'Pistol';
+        let playerPos = { x: canvas.width / 2, y: canvas.height - playerSize };
+        let keys = {};
+        let difficultySettings = {
+            easy: { botSpeed: 1, botHealth: 20 },
+            medium: { botSpeed: 2, botHealth: 30 },
+            hard: { botSpeed: 3, botHealth: 40 },
+            impossible: { botSpeed: 4, botHealth: 50 }
+        };
+        let selectedDifficulty = difficultySettings.easy; // Default to easy
+
+        function drawHealthBar(x, y, health) {
+            ctx.fillStyle = 'red';
+            ctx.fillRect(x, y, 100, 10);
+            ctx.fillStyle = 'green';
+            ctx.fillRect(x, y, health / 150 * 100, 10); // Scale health bar
+        }
+
+        function resetGame() {
+            playerHealth = 15000;
+            score = 0;
+            damageDone = 0; // Reset damage done counter
+            bots = [];
+            bullets = [];
+            waveNumber = 0;
+            gameOver = false;
+            document.getElementById("score").innerText = score;
+            document.getElementById("damageDone").innerText = damageDone; // Update damage display
+            document.getElementById("waveCount").innerText = waveNumber; // Update wave display
+            document.getElementById("finalScore").innerText = score;
+            document.getElementById("gameOverMenu").style.display = "none";
+            document.getElementById("menu").style.display = "block";
+            startNewWave();
+            setButtonColors(); // Set random button colors
+        }
+
+        function startNewWave() {
+            waveNumber++;
+            document.getElementById("waveCount").innerText = waveNumber; // Update wave display
+            const botsPerWave = waveNumber + 4; // Increase the number of bots with each wave
+            for (let i = 0; i < botsPerWave; i++) {
+                bots.push({ x: Math.random() * (canvas.width - botSize), y: -botSize, health: selectedDifficulty.botHealth + waveNumber * 5 }); // Increase bot health
+            }
+        }
+
+        function gameLoop() {
+            if (gameOver) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw player
+            ctx.fillStyle = 'black';
+            ctx.fillRect(playerPos.x, playerPos.y, playerSize, playerSize);
+            drawHealthBar(10, 10, playerHealth);
+
+            // Draw bullets
+            bullets.forEach(bullet => {
+                ctx.fillStyle = guns[currentGun].bulletColor;
+                ctx.fillRect(bullet.x, bullet.y, bulletSize, bulletSize);
+            });
+
+            // Draw bots
+            bots.forEach(bot => {
+                ctx.fillStyle = 'green';
+                ctx.fillRect(bot.x, bot.y, botSize, botSize);
+                drawHealthBar(bot.x, bot.y - 15, bot.health);
+            });
+
+            // Move bullets
+            bullets.forEach((bullet, index) => {
+                bullet.y -= bulletSpeed;
+                if (bullet.y < 0) bullets.splice(index, 1);
+            });
+
+            // Move bots
+            bots.forEach((bot, index) => {
+                bot.y += selectedDifficulty.botSpeed; // Use difficulty setting for bot speed
+                if (bot.y > canvas.height) {
+                    playerHealth -= 100; // Damage player if bot reaches the bottom
+                    bots.splice(index, 1); // Remove bot if it goes off screen
+                }
+            });
+
+            // Collision detection
+            bullets.forEach((bullet, bulletIndex) => {
+                bots.forEach((bot, botIndex) => {
+                    if (bullet.x < bot.x + botSize && bullet.x + bulletSize > bot.x && bullet.y < bot.y + botSize && bullet.y + bulletSize > bot.y) {
+                        bullets.splice(bulletIndex, 1);
+                        bot.health -= guns[currentGun].damage;
+                        damageDone += guns[currentGun].damage; // Increment damage done
+                        document.getElementById("damageDone").innerText = damageDone; // Update damage display
+                        if (bot.health <= 0) {
+                            bots.splice(botIndex, 1);
+                            score += 1;
+                            document.getElementById("score").innerText = score; // Update score display
+                        }
+                    }
+                });
+            });
+
+            // Check for game over
+            if (playerHealth <= 0) {
+                gameOver = true;
+                document.getElementById("finalScore").innerText = score;
+                document.getElementById("gameOverMenu").style.display = "block";
+                document.getElementById("menu").style.display = "none";
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Handle keyboard input
+        document.addEventListener('keydown', (event) => {
+            keys[event.key] = true;
+        });
+
+        document.addEventListener('keyup', (event) => {
+            keys[event.key] = false;
+        });
+
+        function updatePlayerPosition() {
+            if (keys['ArrowLeft'] && playerPos.x > 0) {
+                playerPos.x -= playerSpeed;
+            }
+            if (keys['ArrowRight'] && playerPos.x < canvas.width - playerSize) {
+                playerPos.x += playerSpeed;
+            }
+        }
+
+        function shoot() {
+            if (!gameOver) {
+                bullets.push({ x: playerPos.x + playerSize / 2 - bulletSize / 2, y: playerPos.y, damage: guns[currentGun].damage });
+            }
+        }
+
+        function gameTick() {
+            if (!gameOver) {
+                updatePlayerPosition();
+                if (keys[' ']) {
+                    shoot(); // Shoot continuously while space is pressed
+                }
+                if (bots.length === 0) {
+                    startNewWave(); // Start a new wave if all bots are defeated
+                }
+            }
+            requestAnimationFrame(gameTick);
+        }
+
+        function changeGun(gun) {
+            if (guns[gun]) {
+                currentGun = gun;
+            }
+        }
+
+        function closeTab() {
+            window.close(); // Close the tab
+        }
+
+        function goToMenu() {
+            document.getElementById("difficultyMenu").style.display = "block"; // Show difficulty menu
+            document.getElementById("gameOverMenu").style.display = "none"; // Hide game over menu
+            document.getElementById("menu").style.display = "none"; // Hide game menu
+            resetGame(); // Reset game state
+        }
+
+        function startGame(difficulty) {
+            selectedDifficulty = difficultySettings[difficulty];
+            document.getElementById("difficultyMenu").style.display = "none"; // Hide difficulty menu
+            document.getElementById("menu").style.display = "block"; // Show game menu
+            resetGame(); // Start the game
+            gameLoop();
+            gameTick();
+        }
+
+        // Function to generate a random color
+        function getRandomColor() {
+            const letters = '0123456789ABCDEF';
+            let color = '#';
+            for (let i = 0; i < 6; i++) {
+                color += letters[Math.floor(Math.random() * 16)];
+            }
+            return color;
+        }
+
+        // Function to set random colors for buttons
+        function setButtonColors() {
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(button => {
+                button.style.backgroundColor = getRandomColor();
+            });
+        }
+
+        // Show the difficulty menu when the page loads
+        document.getElementById("difficultyMenu").style.display = "block";
+    </script>
+</body>
+</html>
